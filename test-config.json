@@ -1,0 +1,4 @@
+{
+    "ftp_server_addr": "ftp://ftp.example.com",
+    "ftp_server_port": 21,
+}
