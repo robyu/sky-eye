@@ -2,8 +2,12 @@ import cv2
 import argparse
 import sys
 from pathlib import Path
-from stove_imagecap import config_store
+from sky_eye import config_store
+from sky_eye import mqtt_if
+from sky_eye import mqtt_topics
 import ftplib
+import datetime
+import time
 
 OUT_PATH = Path("./out")
 def capture_image(camera_index, file_path):
@@ -71,12 +75,12 @@ def transfer_file_to_ftp_server(file_path, ftp_server_addr, ftp_server_port):
 
 
 def run(config_json, test_mqtt_client = None):
-    config = ConfigStore(config_json)    
+    config = config_store.ConfigStore(config_json)    
     print("hello world")   
 
     #    def __init__(self, broker_addr, test_client=None):
-    mqtt_if = MqttIf(config.mqtt_broker_addr, test_client=test_mqtt_client)
-    is_connected = mqtt_if.reconnect()
+    my_mqtt = mqtt_if.MqttIf(config.mqtt_broker_addr, test_client=test_mqtt_client)
+    is_connected = my_mqtt.reconnect()
     assert is_connected, "mqtt_if.reconnect() failed"
 
     # create OUT_PATH if it does not exist

@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from queue import Queue
 import logging
-from stove_imagecap import mqtt_topics
+from sky_eye import mqtt_topics
 
 
 """

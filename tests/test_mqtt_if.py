@@ -1,7 +1,7 @@
-from stove_imagecap import mqtt_if
+from sky_eye import mqtt_if
 import unittest
 from unittest.mock import MagicMock
-from stove_imagecap import mqtt_topics
+from sky_eye import mqtt_topics
 
 class TestMqttIf(unittest.TestCase):
     def test_smoke(self):
@@ -13,7 +13,7 @@ class TestMqttIf(unittest.TestCase):
         rcvr = mqtt_if.MqttIf("localhost", test_client=mock_client)
         self.assertTrue(True)
 
-    def test_connecte_with_mock_mqtt(self):
+    def test_connect_with_mock_mqtt(self):
             mock_client = MagicMock()
             rcvr = mqtt_if.MqttIf("localhost", test_client=mock_client)
             rcvr.reconnect()
