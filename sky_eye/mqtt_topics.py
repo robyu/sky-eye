@@ -1,9 +1,11 @@
 class MqttTopics:
     #
     # image capture
-    STOVE_IMAGECAP_TOPIC   = "home/stove-image-capture"
-    IC_CAPTURE_NOW         = f"{STOVE_IMAGECAP_TOPIC}/camera/capture-now"
-    IC_RESET_IMAGE_CAPTURE = f"{STOVE_IMAGECAP_TOPIC}/reset/set"
+    SKY_EYE_TOPIC   = "home/sky-eye"
+    SKY_EYE_CAPTURE_NOW         = f"{SKY_EYE_TOPIC}/camera/capture-now"
+    SKY_EYE_RESET_IMAGE_CAPTURE = f"{SKY_EYE_TOPIC}/reset/set"
+    SKY_EYE_CONNECTED           = f"{SKY_EYE_TOPIC}/connected"
+    SKY_EYE_IM_ALIVE            = f"{SKY_EYE_TOPIC}/imalive"
 
     # stovewatcher
     STOVE_WATCHER_TOPIC = "home/stove-watcher"

@@ -25,7 +25,7 @@ def new_msg(topic, payload):
         topic = topic.encode('utf-8')
     #
     if isinstance(payload, bytes)==False:
-        payload = topic.encode('utf-8')
+        payload = payload.encode('utf-8')
     #
     msg = mqtt.MQTTMessage(topic=topic)
     msg.payload = payload
@@ -34,7 +34,7 @@ def new_msg(topic, payload):
 class MqttIf:
     MAX_QUEUE_LEN = 100
 
-    def __init__(self, broker_addr, test_client=None):
+    def __init__(self, broker_addr, listen_topics_l = [], test_client=None):
         #import pudb;pudb.set_trace()
         client_id = "mqtt-client-" + str(uuid.uuid4())
         
@@ -51,6 +51,8 @@ class MqttIf:
         
         logger = logging.getLogger()
         self.client.enable_logger(logger)
+
+        self.listen_topics_l = listen_topics_l
 
         """
         maxsize – Number of items allowed in the queue.
@@ -70,14 +72,17 @@ class MqttIf:
         """
         reconnect with broker
 
-        this function blocks until the connection occurs
+        this function loops until the connection occurs
+        if it returns False, then the connection failed
         """
         if self.client.is_connected():
             self.client.disconnect()
         #
         self.client.connect(self.broker_addr, port=1883, keepalive=60)
 
-        self.client.subscribe(mqtt_topics.MqttTopics.STOVE_IMAGECAP_TOPIC + "/#")
+        for topic in self.listen_topics_l:
+            self.client.subscribe(topic)
+        #
 
         # loop until we're connected
         count = 1000
@@ -112,6 +117,9 @@ class MqttIf:
     def loop(self):
         self.client.loop(timeout=0.25)  # default timeout is 1.0 s, too long
         return
+
+    def queue_msg(self, message):
+        self.msg_queue.put(message)
 
     def dequeue_msg(self):
         msg = self.msg_queue.get(block=False)   # block=False -> raise exception if empty
