@@ -13,16 +13,16 @@ import logging
 
 class SkyEye:
 
-    def _check_cam_params(self, config):
-        assert config.camera_index >= 0, f"camera index must be > 0"
+    def _check_cam_params(self):
+        assert self.camera_index >= 0, f"camera index must be > 0"
         
         # try to open the camera
-        cap = cv2.VideoCapture(config.camera_index)
-        assert cap.isOpened(), f"could not open camera {config.camera_index}"
+        cap = cv2.VideoCapture(self.camera_index)
+        assert cap.isOpened(), f"could not open camera {self.camera_index}"
+        ret, frame = cap.read()
+        assert ret==True
+        assert len(frame.shape) == 3
         cap.release()
-
-    def _check_mqtt_params(self, config):         
-        assert len(config.mqtt_broker_addr) > 0
 
     def _prep_image_dir(self, image_dir):
         if not image_dir.exists():
@@ -32,26 +32,24 @@ class SkyEye:
         for f in image_dir.glob("*"):
             f.unlink()
 
-    def _check_ftp_params(self, config):
-        assert len(config.image_dir ) > 0
 
-
-        assert len(config.ftp_server_addr) > 0
-        assert config.ftp_server_port > 0
-        assert len(config.ftp_user) > 0
-        assert len(config.ftp_passwd) > 0
         
     def __init__(self, config_fname):
-        self.config = config_store.ConfigStore(config_fname)
+        config = config_store.ConfigStore(config_fname)
 
-        self._check_cam_params(self.config)
-        self._check_mqtt_params(self.config)
-        self._check_ftp_params(self.config)
+        self.camera_index = config.camera_index
+        self._check_cam_params()
 
-        self.image_dir = Path(self.config.image_dir).absolute()
+        self.mqtt_broker_addr = config.mqtt_broker_addr
+
+        self.image_dir = Path(config.image_dir).absolute()
+        self.ftp_server_addr = config.ftp_server_addr
+        self.ftp_server_port = config.ftp_server_port
+        self.ftp_user = config.ftp_user
+        self.ftp_passwd = config.ftp_passwd
         self._prep_image_dir(self.image_dir)
 
-        self.mqtt = mqtt_if.MqttIf(self.config.mqtt_broker_addr)
+        self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr)
 
         self.mqtt_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"]
         self.last_reconnect_time = dt.datetime.now()
@@ -76,8 +74,8 @@ class SkyEye:
         ret, frame = cap.read()
 
         # Check if the frame was successfully read
-        if not ret:
-            print("Failed to capture frame from the camera")
+        if not ret or len(frame.shape) != 3:
+            print(f"Failed to capture frame from the camera {camera_index}")
             return None
 
         # Release the camera
@@ -105,7 +103,7 @@ class SkyEye:
         logging.critical("CRITICAL logging enabled")
 
     def _capture_image(self, out_fname):
-        frame = self.grab_camera_frame(self.config.camera_index)
+        frame = self.grab_camera_frame(self.camera_index)
         
         # Save the captured image to a file
         cv2.imwrite(str(out_fname), frame)
@@ -147,35 +145,39 @@ class SkyEye:
             if msg.payload=="":
                 out_fname = self.image_dir / f"{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
             else:
-                out_fname = Path(msg.payload.decode('utf-8'))
+                out_fname = self.image_dir / Path(msg.payload.decode('utf-8'))
             #
             out_fname = out_fname.absolute()
 
             self._capture_image(out_fname)
             # transfer everything in OUT_PATH to the ftp server
             self._transfer_files()
-        elif msg.topic==mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW:
+        elif msg.topic==mqtt_topics.MqttTopics.SKY_EYE_RESET_IMAGE_CAPTURE:
             print("quitting loop")
             quit_flag = True
         else:
             print(f"unknown topic {msg.topic}")
-        
+        #
+        return quit_flag        
 
     def _transfer_files(self):
         ftp = ftplib.FTP()
 
         # make a list of files in self.image_dir
-        file_paths_l = []
-        for f in self.image_dir.glob("*"):
-            file_paths_l.append(f)
-        #        
-        if len(file_paths_l)==0:
+        file_paths_l = [f for f in self.image_dir.glob("*")]
+        
+        if len(file_paths_l) == 0:
             return
 
-        ftp.connect(self.config.ftp_server_addr, self.config.ftp_server_port)
-        ftp.login(self.config.ftp_user, self.config.ftp_passwd)
-        with open(file_path, "rb") as f:
-            ftp.storbinary(f"STOR {file_path.name}", f)
+        ftp.connect(self.ftp_server_addr, self.ftp_server_port)
+        ftp.login(self.ftp_user, self.ftp_passwd)
+        ftp.set_pasv(True)
+        
+        for file_path in file_paths_l:
+            with open(file_path, "rb") as f:
+                ftp.storbinary(f"STOR {file_path.name}", f)
+            #
+        #
         ftp.quit()
 
     def _run_once(self, inject_mqtt_msg=None):
@@ -240,11 +242,6 @@ def parse_args():
     args = parser.parse_args()
 
     return args
-
-
-
-
-
 
 if __name__=="__main__":
     args = parse_args()
