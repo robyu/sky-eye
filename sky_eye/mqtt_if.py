@@ -34,9 +34,11 @@ def new_msg(topic, payload):
 class MqttIf:
     MAX_QUEUE_LEN = 100
 
-    def __init__(self, broker_addr, listen_topics_l = [], test_client=None):
+    def __init__(self, broker_addr, listen_topics_l = [], test_client=None, client_id = None):
         #import pudb;pudb.set_trace()
-        client_id = "mqtt-client-" + str(uuid.uuid4())
+        if client_id == None:
+            client_id = "mqtt-client-" + str(uuid.uuid4())
+        #
         
         # https://pypi.org/project/paho-mqtt/
         # userdata = passed to callbacks as "userdata" parameter
@@ -52,6 +54,7 @@ class MqttIf:
         logger = logging.getLogger()
         self.client.enable_logger(logger)
 
+        assert len(listen_topics_l) > 0
         self.listen_topics_l = listen_topics_l
 
         """
@@ -76,22 +79,21 @@ class MqttIf:
         if it returns False, then the connection failed
         """
         if self.client.is_connected():
+            try:
+                self.client.loop_stop()  
+            except e:
+                print(f"caught exception {e} while stopping mqtt loop")
             self.client.disconnect()
         #
         self.client.connect(self.broker_addr, port=1883, keepalive=60)
 
+        # do I need to do this every time I reconnect?
         for topic in self.listen_topics_l:
             self.client.subscribe(topic)
         #
 
-        # loop until we're connected
-        count = 1000
-        while self.client.is_connected()==False:
-            self.loop()
-            count = count - 1
-
-            assert count >= 0, "mqtt_if.reconnect took too long"
-        #
+        self.client.loop_start()  # this starts a listening thread
+        time.sleep(0.5)  # give everyone time to settle down
         return self.client.is_connected()
         
 
@@ -114,9 +116,6 @@ class MqttIf:
     def get_len_queue(self):
         return self.msg_queue.qsize()
 
-    def loop(self):
-        self.client.loop(timeout=0.25)  # default timeout is 1.0 s, too long
-        return
 
     def queue_msg(self, message):
         self.msg_queue.put(message)
@@ -132,5 +131,15 @@ class MqttIf:
         msg = self.msg_queue.get(block=False)   # block=False -> raise exception if empty
         msg.payload = msg.payload.decode("utf-8")
         return msg
+    
+    
+    def __del__(self):
+        if self.client.is_connected():
+            try:
+                self.client.loop_stop()
+            except e:
+                print(f"caught exception {e} while stopping mqtt loop")
+            self.client.disconnect()
+        #
     
     

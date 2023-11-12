@@ -4,7 +4,7 @@
     "ftp_user": "testuser",
     "ftp_passwd": "testpasswd",
 
-    "image_dir": "./capturedimages",
+    "image_dir": "./tests/capturedimages",
 
     "mqtt_broker_addr": "192.168.2.8",
 

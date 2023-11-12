@@ -49,7 +49,8 @@ class SkyEye:
         self.ftp_passwd = config.ftp_passwd
         self._prep_image_dir(self.image_dir)
 
-        self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr)
+        self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr,
+                                   listen_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"])
 
         self.mqtt_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"]
         self.last_reconnect_time = dt.datetime.now()
@@ -111,16 +112,23 @@ class SkyEye:
 
 
 
-    def _do_loop_tasks(self):
+    def _do_loop_tasks(self, now = None):
         """                                                                                                                                                               
         1. establish/reconnect with server                                                                                                                                
         2. publish "i'm alive"                                                                                                                                            
         """
-        now = dt.datetime.now()
+        if now==None:
+            now = dt.datetime.now()
+        else:
+            assert isinstance(now, dt.datetime)
+        #
         delta = now - self.last_reconnect_time
         assert delta.total_seconds() >= 0.0
 
-        # periodically reconnect with server.                                                                                # the solves the issue where if the server reboots, the mqtt server                                                  # does not reestablish connections with the clients nor does the client                                              # know that the server has disappeared.                                                                                                                           
+        # periodically reconnect with server.
+        # this solves the issue where if the server reboots, the mqtt server 
+        # does not reestablish connections with the clients nor does the client  
+        # know that the server has disappeared.                                                                                                                           
         if self.mqtt.client.is_connected()==False or delta.total_seconds() >= self.reconnect_sec:
             self.mqtt.reconnect()  # blocks: does not return until connection reestablished
             logging.info(f"Reconnected to server {self.mqtt.broker_addr} @ {now}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.reconnect_sec:.2f}" )
@@ -133,8 +141,8 @@ class SkyEye:
         if delta.total_seconds() >= self.im_alive_sec:
             logging.info(f"I'm alive @ {now}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.im_alive_sec:.2f}")
             self.mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_IM_ALIVE, payload=f"{now}")
-            self.last_im_alive_time = datetime.now()
-        #                                                                                                                                                                 
+            self.last_im_alive_time = dt.datetime.now()
+        #                                                                                                                                                               
         return
     
     def _handle_msg(self, msg):
@@ -170,6 +178,7 @@ class SkyEye:
             return
 
         ftp.connect(self.ftp_server_addr, self.ftp_server_port)
+        time.sleep(0.25)  # give connection time to settle; this pause considerably improves reliability
         ftp.login(self.ftp_user, self.ftp_passwd)
         ftp.set_pasv(True)
         
@@ -198,7 +207,7 @@ class SkyEye:
         quit_flag = False
         while quit_flag==False:
             self._do_loop_tasks()
-            self.mqtt.loop()  # blocking           
+       
 
             quit_flag = self._process_msg()                                                         
 
