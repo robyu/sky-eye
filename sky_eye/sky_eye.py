@@ -48,11 +48,10 @@ class SkyEye:
         self.ftp_user = config.ftp_user
         self.ftp_passwd = config.ftp_passwd
         self._prep_image_dir(self.image_dir)
-
-        self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr,
-                                   listen_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"])
-
         self.mqtt_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"]
+        self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr,
+                                   listen_topics_l = self.mqtt_topics_l)
+
         self.last_reconnect_time = dt.datetime.now()
         self.reconnect_sec = 10.0 * 60.0
         self.last_im_alive_time = dt.datetime.now()
@@ -112,17 +111,17 @@ class SkyEye:
 
 
 
-    def _do_loop_tasks(self, now = None):
+    def _do_loop_tasks(self, now_dt = None):
         """                                                                                                                                                               
         1. establish/reconnect with server                                                                                                                                
         2. publish "i'm alive"                                                                                                                                            
         """
-        if now==None:
-            now = dt.datetime.now()
+        if now_dt==None:
+            now_dt = dt.datetime.now()
         else:
-            assert isinstance(now, dt.datetime)
+            assert isinstance(now_dt, dt.datetime)
         #
-        delta = now - self.last_reconnect_time
+        delta = now_dt - self.last_reconnect_time
         assert delta.total_seconds() >= 0.0
 
         # periodically reconnect with server.
@@ -131,16 +130,16 @@ class SkyEye:
         # know that the server has disappeared.                                                                                                                           
         if self.mqtt.client.is_connected()==False or delta.total_seconds() >= self.reconnect_sec:
             self.mqtt.reconnect()  # blocks: does not return until connection reestablished
-            logging.info(f"Reconnected to server {self.mqtt.broker_addr} @ {now}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.reconnect_sec:.2f}" )
-            self.mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_CONNECTED , payload=f"{now}")
+            logging.info(f"Reconnected to server {self.mqtt.broker_addr} @ {now_dt}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.reconnect_sec:.2f}" )
+            self.mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_CONNECTED , payload=f"{now_dt}")
             self.last_reconnect_time = dt.datetime.now()
         #                                                                                                                                                                 
 
-        delta = now - self.last_im_alive_time
+        delta = now_dt - self.last_im_alive_time
         assert delta.total_seconds() >= 0.0
         if delta.total_seconds() >= self.im_alive_sec:
-            logging.info(f"I'm alive @ {now}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.im_alive_sec:.2f}")
-            self.mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_IM_ALIVE, payload=f"{now}")
+            logging.info(f"I'm alive @ {now_dt}, delta_sec={delta.total_seconds():.2f}, interval_sec={self.im_alive_sec:.2f}")
+            self.mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_IM_ALIVE, payload=f"{now_dt}")
             self.last_im_alive_time = dt.datetime.now()
         #                                                                                                                                                               
         return
@@ -186,32 +185,39 @@ class SkyEye:
             with open(file_path, "rb") as f:
                 ftp.storbinary(f"STOR {file_path.name}", f)
             #
+            # delete the file
+            file_path.unlink()
         #
         ftp.quit()
 
-    def _run_once(self, inject_mqtt_msg=None):
+    def _run_once(self, inject_mqtt_msg=None, now_dt = None):
+
         #
         # if msg specified, then stick it in the queue (for debugging)
         if inject_mqtt_msg != None:
             self.mqtt.queue_msg(inject_mqtt_msg)
         #
+
+        # reconnect, send i'm alive, etc.
+        self._do_loop_tasks(now_dt = now_dt)
+        
+        # handle received messages
         quit_flag = False
         while  self.mqtt.queue_is_empty()==False:  # process all messages in the queue
             msg = self.mqtt.dequeue_msg()
             quit_flag = quit_flag or self._handle_msg(msg)  # _handle_msg can return True to exit loop
-        #  
+        #          
+
         return quit_flag
 
 
     def run(self):
         quit_flag = False
         while quit_flag==False:
-            self._do_loop_tasks()
-       
+            quit_flag = self._run_once()                                                    
+            time.sleep(0.25)
+        #
 
-            quit_flag = self._process_msg()                                                         
-
-                                                                                                
         #
         print("exiting sky-eye")                                                                                                      
     #   

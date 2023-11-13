@@ -81,7 +81,8 @@ class MqttIf:
         if self.client.is_connected():
             try:
                 self.client.loop_stop()  
-            except e:
+            except Exception as e:
+
                 print(f"caught exception {e} while stopping mqtt loop")
             self.client.disconnect()
         #
@@ -132,14 +133,16 @@ class MqttIf:
         msg.payload = msg.payload.decode("utf-8")
         return msg
     
-    
+
+
     def __del__(self):
         if self.client.is_connected():
             try:
                 self.client.loop_stop()
-            except e:
+            except Exception as e:
                 print(f"caught exception {e} while stopping mqtt loop")
             self.client.disconnect()
         #
+
     
     

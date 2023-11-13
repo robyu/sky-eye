@@ -30,14 +30,16 @@ class TestSkyEye(unittest.TestCase):
         eye = sky_eye.SkyEye(self.TEST_CONFIG_FILE)
         self.assertTrue(True)
 
-    def test_take_image(self):
+    def test_take_image_via_injection(self):
+        import pudb; pudb.set_trace()
+        dest_file = self.ftp_dest_dir / "test.jpg"
+        self.assertFalse(dest_file.exists())
 
         eye = sky_eye.SkyEye(self.TEST_CONFIG_FILE)
         msg = mqtt_if.new_msg(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, "test.jpg")
-        eye._run_once(msg)
+        eye._run_once(inject_mqtt_msg=msg)
 
         # check that a file ended up in self.ftp_dest_dir
-        dest_file = self.ftp_dest_dir / "test.jpg"
         self.assertTrue(dest_file.exists())
 
 
@@ -52,7 +54,7 @@ class TestSkyEye(unittest.TestCase):
         eye = sky_eye.SkyEye(self.TEST_CONFIG_FILE)
         # add im_alive_sec to now
         now_dt = dt.datetime.now() + dt.timedelta(seconds=eye.im_alive_sec)
-        eye._do_loop_tasks(now=now_dt)
+        eye._run_once(now_dt=now_dt)
 
         # skyeye should have published "connected" and "imalive"
         time.sleep(0.5)  # give messages time to bounce around
@@ -68,6 +70,28 @@ class TestSkyEye(unittest.TestCase):
         self.assertTrue(msg.topic in topic_set)
 
 
+    def test_take_image_via_mqtt(self):
+            import pudb; pudb.set_trace()
+            test_mqtt = mqtt_if.MqttIf(self.config.mqtt_broker_addr, 
+                                    client_id = "test_connect_broker",
+                                    listen_topics_l=[mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"])
+            is_connected=test_mqtt.reconnect()
+            self.assertTrue(is_connected)
 
 
-    
+            dest_file = self.ftp_dest_dir / "test.jpg"
+            self.assertFalse(dest_file.exists())
+
+
+            eye = sky_eye.SkyEye(self.TEST_CONFIG_FILE)
+            eye._run_once()
+
+            # send "capture_now" to sky_eye
+            test_mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, payload="test.jpg")
+            time.sleep(0.5)  # give message time to bounce around
+
+            eye._run_once()
+
+
+            # check that a file ended up in self.ftp_dest_dir
+            self.assertTrue(dest_file.exists())
