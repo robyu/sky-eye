@@ -48,7 +48,9 @@ class SkyEye:
         self.ftp_user = config.ftp_user
         self.ftp_passwd = config.ftp_passwd
         self._prep_image_dir(self.image_dir)
-        self.mqtt_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"]
+        self.mqtt_topics_l = [mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW,
+                              mqtt_topics.MqttTopics.SKY_EYE_RESET_IMAGE_CAPTURE]
+        
         self.mqtt = mqtt_if.MqttIf(self.mqtt_broker_addr,
                                    listen_topics_l = self.mqtt_topics_l)
 
@@ -58,7 +60,7 @@ class SkyEye:
         self.im_alive_sec = 15.0 * 60.0
 
         # DEBUG, INFO, WARNING, ERROR, CRITICAL
-        self._configure_logging("INFO")
+        self._configure_logging("DEBUG")
 
     # BEGIN: yz18jx9d4h3k
     @staticmethod
@@ -148,6 +150,7 @@ class SkyEye:
         quit_flag = False
 
         if msg.topic==mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW:
+            print("handling capture_now")
             # if msg argument is "", then generate a filename based on the time-date
             if msg.payload=="":
                 out_fname = self.image_dir / f"{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.jpg"
@@ -163,7 +166,7 @@ class SkyEye:
             print("quitting loop")
             quit_flag = True
         else:
-            print(f"unknown topic {msg.topic}")
+            print(f"unhandled topic {msg.topic}")
         #
         return quit_flag        
 
@@ -182,10 +185,12 @@ class SkyEye:
         ftp.set_pasv(True)
         
         for file_path in file_paths_l:
+            print(f"transferring {file_path}")
             with open(file_path, "rb") as f:
                 ftp.storbinary(f"STOR {file_path.name}", f)
             #
             # delete the file
+            print(f"deleting {file_path}")
             file_path.unlink()
         #
         ftp.quit()

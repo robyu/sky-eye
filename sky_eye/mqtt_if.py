@@ -50,6 +50,7 @@ class MqttIf:
         self.broker_addr = broker_addr
         self.client.on_message = MqttIf.on_message
         self.client.on_connect = MqttIf.on_connect
+        self.client.on_disconnect = MqttIf.on_disconnect
         
         logger = logging.getLogger()
         self.client.enable_logger(logger)
@@ -97,6 +98,9 @@ class MqttIf:
         time.sleep(0.5)  # give everyone time to settle down
         return self.client.is_connected()
         
+    def on_disconnect(client, userdata, rc=0):
+        logging.info("disconnected result code " + str(rc))
+        client.loop_stop()
 
     def on_connect(mqttc, obj, flags, rc):
         # obj = 2nd argument to Client() ctor
@@ -135,14 +139,13 @@ class MqttIf:
     
 
 
-    def __del__(self):
-        if self.client.is_connected():
-            try:
-                self.client.loop_stop()
-            except Exception as e:
-                print(f"caught exception {e} while stopping mqtt loop")
-            self.client.disconnect()
+    # def __del__(self):
+    #     print("deleting mqtt_if")
+    #     if self.client.is_connected():
+    #         print("disconnecting from broker")
+    #         try:
+    #             self.client.loop_stop()
+    #         except Exception as e:
+    #             print(f"caught exception {e} while stopping mqtt loop")
+    #         self.client.disconnect()
         #
-
-    
-    

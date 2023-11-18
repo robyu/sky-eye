@@ -31,12 +31,12 @@ class TestSkyEye(unittest.TestCase):
         self.assertTrue(True)
 
     def test_take_image_via_injection(self):
-        import pudb; pudb.set_trace()
-        dest_file = self.ftp_dest_dir / "test.jpg"
+        #import pudb; pudb.set_trace()
+        dest_file = self.ftp_dest_dir / "test_0.jpg"
         self.assertFalse(dest_file.exists())
 
         eye = sky_eye.SkyEye(self.TEST_CONFIG_FILE)
-        msg = mqtt_if.new_msg(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, "test.jpg")
+        msg = mqtt_if.new_msg(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, str(dest_file.name))
         eye._run_once(inject_mqtt_msg=msg)
 
         # check that a file ended up in self.ftp_dest_dir
@@ -45,8 +45,9 @@ class TestSkyEye(unittest.TestCase):
 
     def test_connect_broker(self):
         #import pudb; pudb.set_trace()
+        print(f"***{__name__}")
         test_mqtt = mqtt_if.MqttIf(self.config.mqtt_broker_addr, 
-                                   client_id = "test_connect_broker",
+                                   client_id = f"test_connect_broker",
                                    listen_topics_l=[mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"])
         is_connected=test_mqtt.reconnect()
         self.assertTrue(is_connected)
@@ -58,6 +59,9 @@ class TestSkyEye(unittest.TestCase):
 
         # skyeye should have published "connected" and "imalive"
         time.sleep(0.5)  # give messages time to bounce around
+
+
+
         num_rcvd = test_mqtt.get_len_queue()
         self.assertTrue(num_rcvd == 2)
 
@@ -69,17 +73,23 @@ class TestSkyEye(unittest.TestCase):
         msg = test_mqtt.dequeue_msg()
         self.assertTrue(msg.topic in topic_set)
 
+        #test_mqtt.client.loop_stop()
+        print("\ntest done")
+
+
+
 
     def test_take_image_via_mqtt(self):
-            import pudb; pudb.set_trace()
+            #import pudb; pudb.set_trace()
+            print("\n** test_take_image_via_mqtt **\n")
             test_mqtt = mqtt_if.MqttIf(self.config.mqtt_broker_addr, 
-                                    client_id = "test_connect_broker",
+                                    client_id = f"test_take_image",
                                     listen_topics_l=[mqtt_topics.MqttTopics.SKY_EYE_TOPIC + "/#"])
             is_connected=test_mqtt.reconnect()
             self.assertTrue(is_connected)
 
 
-            dest_file = self.ftp_dest_dir / "test.jpg"
+            dest_file = self.ftp_dest_dir / "test_1.jpg"
             self.assertFalse(dest_file.exists())
 
 
@@ -87,11 +97,15 @@ class TestSkyEye(unittest.TestCase):
             eye._run_once()
 
             # send "capture_now" to sky_eye
-            test_mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, payload="test.jpg")
+            test_mqtt.client.publish(mqtt_topics.MqttTopics.SKY_EYE_CAPTURE_NOW, payload=str(dest_file.name))
             time.sleep(0.5)  # give message time to bounce around
 
             eye._run_once()
-
+            #time.sleep(0.5)
+            #eye._run_once()
+            #time.sleep(0.5)
 
             # check that a file ended up in self.ftp_dest_dir
             self.assertTrue(dest_file.exists())
+
+            #test_mqtt.client.loop_stop()
